@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:aop="http://www.springframework.org/schema/aop" xmlns:jaxws="http://cxf.apache.org/jaxws"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd http://cxf.apache.org/jaxws http://cxf.apache.org/schemas/jaxws.xsd">
+    <!--配置配置文件读取命令-->
+    <context:property-placeholder location="classpath:db.properties"/>
+    <!--配置C3P0连接池-->
+    <bean name="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <property name="jdbcUrl" value="${jdbc.jdbcUrl}" />
+        <property name="driverClass" value="${jdbc.driverClass}" />
+        <property name="user" value="${jdbc.user}" />
+        <property name="password" value="${jdbc.password}" />
+    </bean>
+    <!--配置hibernate工厂-->
+    <!--配置hibernate工厂-->
+    <bean name="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="hibernateProperties">
+            <props>
+                <prop key="hibernate.dialect" >org.hibernate.dialect.MySQLDialect</prop>
+                <!--  可选配置 -->
+                <prop key="hibernate.show_sql" >true</prop>
+                <prop key="hibernate.format_sql" >true</prop>
+                <prop key="hibernate.hbm2ddl.auto" >update</prop>
+            </props>
+        </property>
+
+        <property name="mappingLocations">
+            <list>
+                <value>classpath:com/itheima/bean/*.xml</value>
+            </list>
+        </property>
+    </bean>
+    <!--配置事务-->
+    <bean name="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+        <property name="sessionFactory" ref="sessionFactory"/>
+    </bean>
+    <!-- 配置通知 -->
+    <tx:advice id="txAdvice" transaction-manager="transactionManager" >
+        <tx:attributes>
+            <tx:method name="save*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+            <tx:method name="persist*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+            <tx:method name="update*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+            <tx:method name="modify*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+            <tx:method name="delete*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+            <tx:method name="remove*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+            <tx:method name="get*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="true" />
+            <tx:method name="find*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="true" />
+            <tx:method name="*" isolation="REPEATABLE_READ" propagation="REQUIRED" read-only="false" />
+        </tx:attributes>
+    </tx:advice>
+    <!-- 配置将通知织入目标对象
+    配置切点
+    配置切面 -->
+    <aop:config>
+        <aop:pointcut expression="execution(* com.itheima.service.impl.*ServiceImpl.*(..))" id="txPc"/>
+        <aop:advisor advice-ref="txAdvice" pointcut-ref="txPc" />
+    </aop:config>
+    <!-- 组件扫描 -->
+    <context:component-scan base-package="com.itheima"/>
+
+    <!-- 支持spring注解 -->
+    <context:annotation-config/>
+    <!--调用远程CRM服务-->
+    <jaxws:client id="crmClient" address="http://localhost:8080/crm/service/customer"
+                  serviceClass="com.itheima.crm.service.ICustomerService"/>
+    <!--配置shiro框架的过滤器工厂-->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <property name="securityManager" ref="securityManager"/>
+        <property name="loginUrl" value="/login.jsp"/>
+        <property name="successUrl" value="/index.jsp"/>
+        <property name="unauthorizedUrl" value="unauthorized.jsp"/>
+        <!--指定URL拦截级别-->
+        <property name="filterChainDefinitions">
+            <value>
+                /css/** = anon
+                /js/** = anon
+                /images/** = anon
+                /validatecode.jsp* = anon
+                /login.jsp = anon
+                /userAction_login.action = anon
+                /** = authc
+            </value>
+        </property>
+    </bean>
+    <!--配置安全管理器-->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <!--注入自定义realm-->
+        <property name="realm" ref="bosRealm"/>
+        <!--将缓存管理器注入安全管理器-->
+        <property name="cacheManager" ref="ehCacheManager"/>
+    </bean>
+    <!--注册自定义realm-->
+    <bean id="bosRealm" class="com.itheima.realm.BOSRealm"/>
+    <!-- 开启shiro框架注解支持 -->
+    <bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator">
+        <property name="proxyTargetClass" value="true"/>
+    </bean>
+    <aop:aspectj-autoproxy proxy-target-class="true"/>
+    <!-- 配置shiro框架提供的切面类，用于创建代理对象 -->
+    <bean class="org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor"/>
+
+    <!--配置缓存管理器对象-->
+    <bean name="ehCacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+        <property name="cacheManagerConfigFile" value="classpath:ehcache.xml"/>
+    </bean>
+
+</beans>
